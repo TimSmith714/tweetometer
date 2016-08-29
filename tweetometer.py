@@ -1,60 +1,87 @@
-#Tweet-o-meter: Add your own Twitter API developer keys (lines 9-12)
-# and choose your own keyword/hashtag (line 56)
+# Tweet-o-meter adapted from MagPi version to use
+# three LEDS
+#https://github.com/topshed/tweetometer
+
 import time, sys
 from textblob import TextBlob
-from gpiozero import RGBLED
 from twython import TwythonStreamer
+import RPi.GPIO as GPIO
 
-# Add Python Developer App tokens and secret keys
-APP_KEY ='ENTER APP KEY HERE' # <- CHANGE
-APP_SECRET = 'ENTER APP SECRET HERE' # <- CHANGE
-OAUTH_TOKEN = 'ENTER OAUTH_TOKEN HERE' # <- CHANGE
-OAUTH_TOKEN_SECRET = 'ENTER OAUTH_TOKEN_SECRET HERE' # <- CHANGE
+# Twitter App tokens and secret keys
+APP_KEY = 'APP KEY HERE'
+APP_SECRET = 'APP SECRET HERE'
+OAUTH_TOKEN = 'TOKEN'
+OAUTH_TOKEN_SECRET = 'TOKEN SEPARATE'
 
-# Set our RGB LED pins
-status_led = RGBLED(14,15,18, active_high=True)
-# Set active_high to False for common anode RGB LED
-status_led.off()
-totals = {'pos':0,'neg':0,'neu':0}
-colours = {'pos':(0,1,0),'neg':(1,0,0),'neu':(0,0,1)}
+# Set the Pins
+
+RED = 22
+YELLOW = 17
+GREEN = 27
+
+GPIO.setmode(GPIO.BCM)
+
+GPIO.setup(RED, GPIO.OUT)
+GPIO.setup(YELLOW, GPIO.OUT)
+GPIO.setup(GREEN, GPIO.OUT)
+
+#Set the totals
+totals = {'pos': 0, 'neg': 0, 'neu': 0}
+
+def shineLED(colour):
+    if colour == 'green':
+        GPIO.output(RED, False)
+        GPIO.output(YELLOW, False)
+        GPIO.output(GREEN, True)
+    elif colour == 'yellow':
+        GPIO.output(RED, False)
+        GPIO.output(YELLOW, True)
+        GPIO.output(GREEN, False)
+    elif colour == 'red':
+        GPIO.output(RED, True)
+        GPIO.output(YELLOW, False)
+        GPIO.output(GREEN, False)
+
 
 class MyStreamer(TwythonStreamer):
-    def on_success(self,data): # When we get valid data
+    def on_success(self,data): #When we get valid data
         if 'text' in data: # If the tweet has a text field
             tweet = data['text'].encode('utf-8')
-            #print(tweet) # uncomment to display  each tweet
-            tweet_pro = TextBlob(data['text']) # calculate sentiment
-            # adjust value below to tune sentiment sensitivity
-            if tweet_pro.sentiment.polarity > 0.1: # Positive
+            print(tweet) #display each tweet
+            tweet_pro = TextBlob(data['text']) #Calculate sentiment
+            #Adjust value below to tune setiment sensitivity
+            if tweet_pro.sentiment.polarity > 0.1: #positive
                 print('Positive')
-                status_led.blink(on_time=0.4, off_time=0.2, on_color=(0, 1, 0), n=1, background=False)
+                shineLED('green')# SHOW GREEN LED
                 totals['pos']+=1
-            # adjust value below to tune sentiment sensitivity
-            elif tweet_pro.sentiment.polarity < -0.1: # Negative
+            elif tweet_pro.sentiment.polarity < -0.1: #negative
                 print('Negative')
-                status_led.blink(on_time=0.4, off_time=0.2, on_color=(1, 0, 0), n=1, background=False)
+                # SHOW RED LED
+                shineLED('red')
                 totals['neg']+=1
             else:
-                print('Neutral') # Neutral
-                status_led.blink(on_time=0.4, off_time=0.2, on_color=(0, 0, 1), n=1, background=False)
+                print('Neutral')
+                # SHOW YELLOW LED
+                shineLED('yellow')
                 totals['neu']+=1
-        overall_sentiment = max(totals.keys(),key=(lambda k: totals[k]))
-        status_led.color = colours[overall_sentiment]
-        print(totals)
-        print('winning: ' + overall_sentiment)
-        time.sleep(0.5) # Throttling
+            overall_sentiment = max(totals.keys(),key=(lambda k: totals[k]))
+            # Show the status LED colour
+            print(totals)
+            print('winning: ' + overall_sentiment)
+            time.sleep(0.5) # Throttling
 
-    def on_error(self, status_code, data): # Catch and display Twython errors
-        print( "Error: " )
-        print( status_code)
-        status_led.blink(on_time=0.5,off_time=0.5, on_color=(1,1,0),n=3)
+        def on_error(self, status_code, data): # catch and display Twython Errors
+            print("Error: ")
+            print( status_code)
+            # FLASH RED LED
 
-#Start processing the stream
+    # Start processing the stream
 stream2 = MyStreamer(APP_KEY, APP_SECRET, OAUTH_TOKEN, OAUTH_TOKEN_SECRET)
-while True:  #Endless loop: personalise to suit your own purposes
+while True: # Endless loop may want to adjust
     try:
-        stream2.statuses.filter(track='magpi') # <- CHANGE THIS KEYWORD!
-    except KeyboardInterrupt: # Exit on ctrl-C
+        stream2.statuses.filter(track='BankHolidayMonday') # Change for a different keyword
+    except KeyboardInterrupt: # Exit on Ctrl+C
+        GPIO.cleanup()
         sys.exit()
-    except: # Ignore other errors and keep going
+    except: # Ignore all other errors
         continue
